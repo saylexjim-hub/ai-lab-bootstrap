@@ -103,21 +103,40 @@ docker ps --format '{{.Names}}' 2>/dev/null | while read -r ctr; do
     fi
   fi
 
-  # Buscar en stacks/ o repos/ con compose files
-  for compose_dir in "$LAB_DIR/stacks"/*/ "$LAB_DIR/repos"/*/; do
-    [ -d "$compose_dir" ] || continue
-    for cfile in docker-compose.yml compose.yaml docker-compose.yaml; do
-      if [ -f "$compose_dir/$cfile" ] && grep -qi "$ctr" "$compose_dir/$cfile" 2>/dev/null; then
-        in_stacks=true
-        break 2
-      fi
-    done
-  done
+  # Gobernanza por Compose: se le pregunta al CONTENEDOR, no a los archivos.
+  #
+  # Antes esto hacia grep del nombre del contenedor dentro de cada compose, y
+  # fallaba en los dos sentidos:
+  #
+  #   - Falso GAP: Compose DERIVA el nombre del contenedor del proyecto mas el
+  #     servicio. Con "name: paperclip" y servicio "db" el contenedor se llama
+  #     "paperclip-db-1", cadena que no aparece en ninguna parte del archivo.
+  #     Contenedores perfectamente gobernados se reportaban como GAP, el guard
+  #     salia !=0 y el DAG lab-guards quedaba en failed todas las semanas.
+  #
+  #   - Falso OK: un contenedor creado con "docker run" se daba por cubierto si
+  #     existia un compose que mencionara su nombre. Es el caso tipico de
+  #     searxng y portainer desplegados a mano: el archivo esta, pero nadie
+  #     puede recrear el contenedor desde el. El guard miraba el archivo, no el
+  #     contenedor, que es justo lo contrario de lo que la pregunta requiere.
+  #
+  # Los labels que Compose escribe en el contenedor son la unica prueba de que
+  # algo es reproducible desde codigo. Se reportan proyecto y working_dir para
+  # que el hallazgo sea accionable.
+  compose_project=$(docker inspect "$ctr" \
+    --format '{{index .Config.Labels "com.docker.compose.project"}}' 2>/dev/null)
+  compose_workdir=$(docker inspect "$ctr" \
+    --format '{{index .Config.Labels "com.docker.compose.project.working_dir"}}' 2>/dev/null)
+  if [ -n "$compose_project" ]; then
+    in_stacks=true
+  fi
 
-  if $in_bootstrap || $in_stacks; then
+  if $in_bootstrap; then
     report_ok "container" "$ctr"
+  elif $in_stacks; then
+    report_ok "container" "$ctr (compose: $compose_project @ ${compose_workdir:-?})"
   else
-    report_gap "container" "$ctr" "no cubierto por bootstrap ni stacks/"
+    report_gap "container" "$ctr" "creado con docker run — sin labels de Compose, no es reproducible desde codigo"
   fi
 done
 
