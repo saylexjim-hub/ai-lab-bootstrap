@@ -102,6 +102,16 @@ else
 
     current=$(container_networks "$container")
     for net in ${REQUIRED_NETWORKS[$container]}; do
+      # Red desmantelada (p. ej. mem0_default tras retirar Mem0): no es una falla
+      # del contenedor, y no hay nada que reparar. Sin esta guarda, cada corrida
+      # intentaba "docker network connect" contra una red inexistente, fallaba, y
+      # mandaba un aviso de Telegram: una instancia acumulo ~24.600 lineas de
+      # "falta red mem0_default — conectando..." antes de que alguien lo mirara.
+      # Si la red vuelve a crearse, el chequeo se reanuda solo.
+      if ! docker network inspect "$net" >/dev/null 2>&1; then
+        CHECKS+=("network|$container:$net|absent|network-not-deployed")
+        continue
+      fi
       if ! echo " $current " | grep -q " $net "; then
         echo "  $container: falta red $net — conectando..."
         if docker network connect "$net" "$container" 2>&1; then
