@@ -181,6 +181,16 @@ if [ "$SX_STATUS" = "running" ]; then
 else
   info "SearXNG en estado '$SX_STATUS' — levantando desde stack..."
   cd ~/ai-lab/stacks/searxng
+  # El compose del stack declara SEARXNG_SECRET con ":?", o sea obligatorio, y
+  # setup-instance.sh deliberadamente NO genera el .env: solo avisa que hay que
+  # copiarlo del .env.example. Si ese paso manual quedo pendiente, este
+  # "docker compose up -d" falla con un error de interpolacion que no dice nada
+  # sobre el reinicio, y el servicio simplemente no vuelve. Se detecta antes y
+  # se dice exactamente que falta.
+  if [ ! -f .env ]; then
+    fail "SearXNG: falta ~/ai-lab/stacks/searxng/.env — copiar de .env.example y definir SEARXNG_SECRET (openssl rand -hex 24; chmod 600)"
+    ERRORS=$((ERRORS + 1))
+  else
   docker compose up -d 2>&1 | tail -3
   sleep 5
   SX_STATUS=$(docker inspect searxng --format '{{.State.Status}}' 2>/dev/null || echo "missing")
@@ -189,6 +199,7 @@ else
   else
     fail "SearXNG no arrancó — revisar: docker logs searxng --tail=20"
     ERRORS=$((ERRORS + 1))
+  fi
   fi
 fi
 
