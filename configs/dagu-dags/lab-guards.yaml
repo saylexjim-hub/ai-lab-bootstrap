@@ -12,12 +12,26 @@ steps:
     depends:
       - generate-manifest
     timeout_sec: 120
+    # Los guards salen !=0 cuando ENCUENTRAN algo (guard-lib.sh::guard_exit_code
+    # devuelve [ gap -eq 0 ]). Eso es un hallazgo de auditoria, no una falla de
+    # ejecucion: sin continue_on el primer GAP cancela los pasos siguientes y
+    # profile-guards no corre. El paso sigue marcado como fallido y el DAG
+    # termina en failed, asi que el aviso de onFailure se conserva.
+    continue_on:
+      failure: true
 
   - name: bootstrap-guard
     run: $HOME/ai-lab/ops/guards/bootstrap-guard.sh
     depends:
       - core-guard
     timeout_sec: 120
+    # Los guards salen !=0 cuando ENCUENTRAN algo (guard-lib.sh::guard_exit_code
+    # devuelve [ gap -eq 0 ]). Eso es un hallazgo de auditoria, no una falla de
+    # ejecucion: sin continue_on el primer GAP cancela los pasos siguientes y
+    # profile-guards no corre. El paso sigue marcado como fallido y el DAG
+    # termina en failed, asi que el aviso de onFailure se conserva.
+    continue_on:
+      failure: true
 
   - name: profile-guards
     run: |
