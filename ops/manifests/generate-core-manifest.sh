@@ -205,7 +205,14 @@ if [ -f "$LAB_DIR/scripts/.env" ] && grep -q "RESTIC_PASSWORD" "$LAB_DIR/scripts
   export B2_ACCOUNT_ID="${B2_ACCOUNT_ID:-}"
   export B2_ACCOUNT_KEY="${B2_BACKUP_KEY:-}"
   export RESTIC_PASSWORD="${RESTIC_PASSWORD:-}"
-  LAST_SNAP=$(restic snapshots --latest 1 --json 2>/dev/null | python3 -c "import json,sys; s=json.load(sys.stdin); print(s[0]['time'][:19] if s else 'none')" 2>/dev/null || echo "unknown")
+  # "--latest 1" NO devuelve un solo snapshot: restic agrupa por host+paths+tags
+  # y devuelve el mas reciente de CADA grupo. Cuando el conjunto de paths del
+  # backup cambia (se agrega un directorio), el grupo viejo queda congelado en el
+  # repo y sigue apareciendo en la respuesta. Tomar s[0] devolvia el grupo mas
+  # viejo, asi que el manifiesto reportaba un last_snapshot de meses atras
+  # mientras el backup diario corria sin fallar — y el dato empeora con el tiempo.
+  # Se toma el maximo por fecha sobre todos los grupos.
+  LAST_SNAP=$(restic snapshots --latest 1 --json 2>/dev/null | python3 -c "import json,sys; s=json.load(sys.stdin); print(max(s, key=lambda x: x['time'])['time'][:19] if s else 'none')" 2>/dev/null || echo "unknown")
   echo "  last_snapshot: \"${LAST_SNAP}\"" >> "$MANIFEST"
 else
   echo "  configured: false" >> "$MANIFEST"
