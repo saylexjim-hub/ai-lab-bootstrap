@@ -13,4 +13,14 @@ services:
       - portainer_data:/data
 
 volumes:
+  # name: explicito para que Compose NO le ponga el prefijo del proyecto.
+  # Sin esto el volumen resuelve a "<proyecto>_portainer_data" (p. ej.
+  # "portainer_portainer_data"), mientras que un Portainer creado con
+  # "docker run -v portainer_data:/data" usa "portainer_data" pelado. Al adoptar
+  # ese contenedor con "docker compose up -d", Portainer arranca VACIO y los
+  # datos reales (usuarios, endpoints, settings) quedan en el volumen huerfano.
+  # post-reboot-check.sh ejecuta justo ese comando de forma automatica en su
+  # ruta de recuperacion del boot race de Tailscale, asi que la perdida puede
+  # ocurrir sin que nadie la pida.
   portainer_data:
+    name: portainer_data
